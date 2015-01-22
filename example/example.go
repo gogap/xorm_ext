@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 
-	"reflect"
-
 	"github.com/go-xorm/xorm"
 
 	"github.com/gogap/xorm_ext"
@@ -44,7 +42,6 @@ func main() {
 
 	logicFunc := func(repo interface{}) (txResult xorm_ext.TXResult, err error) {
 		fmt.Println("enter logic")
-		fmt.Println(reflect.TypeOf(repo))
 
 		//this userRepo is a new instance of DBUserRepo
 		if userRepo, ok := repo.(*DBUserRepo); ok {

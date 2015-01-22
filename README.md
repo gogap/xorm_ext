@@ -21,6 +21,10 @@ type User struct {
     Password string
 }
 
+type UserRepo interface {
+    GetUser() string
+}
+
 type DBUserRepo struct {
     xorm_ext.DBRepo
 }
@@ -38,7 +42,7 @@ func (p *DBUserRepo) GetUser() string {
 
 func main() {
 
-    engines := map[string]*xorm.Engine{xorm_ext.REPO_DEFAULT_ENGINE: new(xorm.Engine)} //For Test, please inital it with real code
+    engines := map[string]*xorm.Engine{xorm_ext.REPO_DEFAULT_ENGINE: new(xorm.Engine)}
 
     userRepo := NewUserRepo(engines)
 
@@ -46,7 +50,6 @@ func main() {
 
     logicFunc := func(repo interface{}) (txResult xorm_ext.TXResult, err error) {
         fmt.Println("enter logic")
-        fmt.Println(reflect.TypeOf(repo))
 
         //this userRepo is a new instance of DBUserRepo
         if userRepo, ok := repo.(*DBUserRepo); ok {
@@ -56,10 +59,11 @@ func main() {
         return
     }
 
-    err := dbTXCommitter.CommitTX(userRepo, logicFunc)
+    err := dbTXCommitter.Transaction(userRepo, logicFunc)
+    //Or
+    //err := dbTXCommitter.TransactionUsing("xormEngineName", userRepo, logicFunc)
     if err != nil {
         fmt.Println(err)
     }
 }
-
 ```
