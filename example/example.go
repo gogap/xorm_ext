@@ -44,7 +44,6 @@ func main() {
 
 	logicFunc := func(repo interface{}) (txResult xorm_ext.TXResult, err error) {
 		fmt.Println("enter logic")
-
 		fmt.Println(reflect.TypeOf(repo))
 
 		//this userRepo is a new instance of DBUserRepo
@@ -55,9 +54,9 @@ func main() {
 		return
 	}
 
-	err := dbTXCommitter.CommitTX(userRepo, logicFunc)
+	err := dbTXCommitter.Transaction(userRepo, logicFunc)
 	//Or
-	//err := dbTXCommitter.CommitTXUsing("xormEngineName", userRepo, logicFunc)
+	//err := dbTXCommitter.TransactionUsing("xormEngineName", userRepo, logicFunc)
 	if err != nil {
 		fmt.Println(err)
 	}
