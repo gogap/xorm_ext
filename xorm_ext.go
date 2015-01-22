@@ -8,12 +8,16 @@ import (
 
 type TransactionCommiter interface {
 	CommitTX(repo interface{}, txFunc TXFunc) (err error)
+	CommitTXUsing(name string, repo interface{}, txFunc TXFunc) (err error)
 }
 
 type DBTXCommiter struct {
 }
 
 func (p *DBTXCommiter) CommitTX(originRepo interface{}, txFunc TXFunc) (err error) {
+	return p.CommitTXUsing(REPO_DEFAULT_ENGINE, originRepo, txFunc)
+}
+func (p *DBTXCommiter) CommitTXUsing(name string, originRepo interface{}, txFunc TXFunc) (err error) {
 	iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
 
 	dbRepo := getRepo(originRepo)
@@ -40,7 +44,7 @@ func (p *DBTXCommiter) CommitTX(originRepo interface{}, txFunc TXFunc) (err erro
 	newDbRepo.engines = dbRepo.engines
 	newDbRepo.defaultEngine = dbRepo.defaultEngine
 
-	if e := newDbRepo.BeginTransaction(); e != nil {
+	if e := newDbRepo.BeginTransaction(name); e != nil {
 		return ERR_DB_TX_CANNOT_BEGIN.New()
 	}
 	return newDbRepo.CommitTransaction(newRepoI, txFunc)

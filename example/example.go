@@ -15,6 +15,10 @@ type User struct {
 	Password string
 }
 
+type UserRepo interface {
+	GetUser() string
+}
+
 type DBUserRepo struct {
 	xorm_ext.DBRepo
 }
@@ -52,6 +56,8 @@ func main() {
 	}
 
 	err := dbTXCommitter.CommitTX(userRepo, logicFunc)
+	//Or
+	//err := dbTXCommitter.CommitTXUsing("xormEngineName", userRepo, logicFunc)
 	if err != nil {
 		fmt.Println(err)
 	}

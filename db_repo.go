@@ -41,10 +41,13 @@ func (p *DBRepo) IsTransaction() bool {
 	return p.isTransaction
 }
 
-func (p *DBRepo) BeginTransaction() error {
+func (p *DBRepo) BeginTransaction(engineName string) error {
 	if p.isTransaction == false {
 		p.isTransaction = true
-		p.txSession = p.defaultEngine.NewSession()
+		p.txSession = p.SessionUsing(engineName)
+		if p.txSession == nil {
+			p.txSession = p.defaultEngine.NewSession()
+		}
 	} else {
 		ERR_DB_TX_ALREADY_BEGINED.New()
 	}
