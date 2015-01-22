@@ -66,9 +66,15 @@ func (p *DBRepo) CommitTransaction(repo interface{}, txFunc TXFunc) (err error) 
 
 	isNeedRollBack := true
 	session := p.txSession
-	if session.Begin() != nil {
-		ERR_DB_TX_CANNOT_BEGIN.New()
+
+	if session.Db == nil {
+		return ERR_DB_IS_NIL.New()
 	}
+
+	if session.Begin() != nil {
+		return ERR_DB_TX_CANNOT_BEGIN.New()
+	}
+
 	defer func() {
 		if isNeedRollBack == true {
 			session.Rollback()
@@ -90,14 +96,21 @@ func (p *DBRepo) CommitTransaction(repo interface{}, txFunc TXFunc) (err error) 
 }
 
 func (p *DBRepo) commitTxResult(tx TXResult) (err error) {
-	if err = p.UpdateItems(tx.UpdateItems...); err != nil {
-		return
-	}
-	if err = p.InsertItems(tx.InsertItems...); err != nil {
-		return
-	}
-	if err = p.DeleteItems(tx.DeleteItems...); err != nil {
-		return
+	for _, resultItem := range tx.Items {
+		switch itemType := resultItem.(type) {
+		case UpdateItem:
+			{
+				p.UpdateItems(itemType)
+			}
+		case DeleteItem:
+			{
+				p.DeleteItems(itemType)
+			}
+		case interface{}:
+			{
+				p.InsertItems(itemType)
+			}
+		}
 	}
 	return
 }
@@ -138,6 +151,10 @@ func (p *DBRepo) Session() *xorm.Session {
 		p.txSession != nil {
 		return p.txSession
 	}
+	return p.defaultEngine.NewSession()
+}
+
+func (p *DBRepo) NewSession() *xorm.Session {
 	return p.defaultEngine.NewSession()
 }
 

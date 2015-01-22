@@ -12,22 +12,10 @@ type DeleteItem struct {
 }
 
 type TXResult struct {
-	InsertItems []interface{}
-	UpdateItems []UpdateItem
-	DeleteItems []DeleteItem
+	Items []interface{}
 }
 
-func (p *TXResult) AppendUpdateItem(item UpdateItem) *TXResult {
-	p.UpdateItems = append(p.UpdateItems, item)
-	return p
-}
-
-func (p *TXResult) AppendInsertItem(item interface{}) *TXResult {
-	p.InsertItems = append(p.InsertItems, item)
-	return p
-}
-
-func (p *TXResult) AppendDeleteItem(item DeleteItem) *TXResult {
-	p.DeleteItems = append(p.DeleteItems, item)
+func (p *TXResult) Append(items ...interface{}) *TXResult {
+	p.Items = append(p.Items, items...)
 	return p
 }
