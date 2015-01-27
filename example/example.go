@@ -23,6 +23,7 @@ type DBUserRepo struct {
 
 func NewUserRepo(ormEngines map[string]*xorm.Engine) *DBUserRepo {
 	repo := new(DBUserRepo)
+	//repo.DBRepo = new(xorm_ext.DBRepo)
 	repo.SetEngines(ormEngines)
 	return repo
 }

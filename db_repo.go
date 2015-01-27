@@ -70,10 +70,6 @@ func (p *DBRepo) CommitTransaction(repo interface{}, txFunc TXFunc) (err error) 
 	isNeedRollBack := true
 	session := p.txSession
 
-	if session.Db == nil {
-		return ERR_DB_IS_NIL.New()
-	}
-
 	if session.Begin() != nil {
 		return ERR_DB_TX_CANNOT_BEGIN.New()
 	}
