@@ -54,6 +54,28 @@ func (p *DBRepo) BeginTransaction(engineName string) error {
 	return nil
 }
 
+func (p *DBRepo) CommitNoTransaction(repo interface{}, txFunc TXFunc) (err error) {
+	if p.isTransaction {
+		return ERR_DB_IS_A_TX.New()
+	}
+
+	if p.txSession == nil {
+		return ERR_DB_SESSION_IS_NIL.New()
+	}
+
+	if txFunc == nil {
+		return ERR_DB_TX_NOFUNC.New()
+	}
+
+	if ret, e := txFunc(repo); e != nil {
+		return e
+	} else {
+		p.commitTxResult(ret)
+	}
+
+	return
+}
+
 func (p *DBRepo) CommitTransaction(repo interface{}, txFunc TXFunc) (err error) {
 	if !p.isTransaction {
 		return ERR_DB_NOT_A_TX.New()
