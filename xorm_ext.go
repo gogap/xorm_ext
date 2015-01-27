@@ -79,10 +79,11 @@ func (p *DBTXCommiter) NoTransactionUsing(name string, originRepo interface{}, t
 		err = ERR_NOT_COMBINE_WITH_DBREPO.New()
 		return
 	}
+
 	newDbRepo.engines = dbRepo.engines
 	newDbRepo.defaultEngine = dbRepo.defaultEngine
 
-	return newDbRepo.CommitNoTransaction(newRepoI, txFunc)
+	return newDbRepo.CommitNoTransaction(name, newRepoI, txFunc)
 }
 
 func getRepo(v interface{}) *DBRepo {
