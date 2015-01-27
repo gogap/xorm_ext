@@ -82,9 +82,6 @@ func (p *DBTXCommiter) NoTransactionUsing(name string, originRepo interface{}, t
 	newDbRepo.engines = dbRepo.engines
 	newDbRepo.defaultEngine = dbRepo.defaultEngine
 
-	if e := newDbRepo.BeginTransaction(name); e != nil {
-		return ERR_DB_TX_CANNOT_BEGIN.New()
-	}
 	return newDbRepo.CommitNoTransaction(newRepoI, txFunc)
 }
 
