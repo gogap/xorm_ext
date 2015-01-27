@@ -59,6 +59,8 @@ func (p *DBRepo) CommitNoTransaction(engineName string, repo interface{}, txFunc
 		return ERR_DB_IS_A_TX.New()
 	}
 
+	p.txSession = p.SessionUsing(engineName)
+
 	if p.txSession == nil {
 		return ERR_DB_SESSION_IS_NIL.New()
 	}
@@ -66,8 +68,6 @@ func (p *DBRepo) CommitNoTransaction(engineName string, repo interface{}, txFunc
 	if txFunc == nil {
 		return ERR_DB_TX_NOFUNC.New()
 	}
-
-	p.txSession = p.SessionUsing(engineName)
 
 	if ret, e := txFunc(repo); e != nil {
 		return e
