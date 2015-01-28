@@ -11,7 +11,7 @@ const (
 	REPO_ERR_DEFAULT_ENGINE_NOT_FOUND = "`default` xorm engine not found"
 )
 
-type TXFunc func(repo interface{}) (txResult TXResult, err error)
+type TXFunc func(repos []interface{}) (txResult TXResult, err error)
 
 type DBRepo struct {
 	isTransaction bool
@@ -54,7 +54,7 @@ func (p *DBRepo) BeginTransaction(engineName string) error {
 	return nil
 }
 
-func (p *DBRepo) CommitNoTransaction(engineName string, repo interface{}, txFunc TXFunc) (err error) {
+func (p *DBRepo) CommitNoTransaction(txFunc TXFunc, engineName string, repos ...interface{}) (err error) {
 	if p.isTransaction {
 		return ERR_DB_IS_A_TX.New()
 	}
@@ -69,7 +69,7 @@ func (p *DBRepo) CommitNoTransaction(engineName string, repo interface{}, txFunc
 		return ERR_DB_TX_NOFUNC.New()
 	}
 
-	if ret, e := txFunc(repo); e != nil {
+	if ret, e := txFunc(repos); e != nil {
 		return e
 	} else {
 		p.commitTxResult(ret)
@@ -78,7 +78,7 @@ func (p *DBRepo) CommitNoTransaction(engineName string, repo interface{}, txFunc
 	return
 }
 
-func (p *DBRepo) CommitTransaction(repo interface{}, txFunc TXFunc) (err error) {
+func (p *DBRepo) CommitTransaction(txFunc TXFunc, repos ...interface{}) (err error) {
 	if !p.isTransaction {
 		return ERR_DB_NOT_A_TX.New()
 	}
@@ -105,7 +105,7 @@ func (p *DBRepo) CommitTransaction(repo interface{}, txFunc TXFunc) (err error) 
 		return
 	}()
 
-	if ret, e := txFunc(repo); e != nil {
+	if ret, e := txFunc(repos); e != nil {
 		return e
 	} else {
 		p.commitTxResult(ret)

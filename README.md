@@ -48,18 +48,28 @@ func main() {
 
     dbTXCommitter := new(xorm_ext.DBTXCommiter)
 
-    logicFunc := func(repo interface{}) (txResult xorm_ext.TXResult, err error) {
+    logicFunc := func(repos []interface{}) (txResult xorm_ext.TXResult, err error) {
         fmt.Println("enter logic")
 
-        //this userRepo is a new instance of DBUserRepo
-        if userRepo, ok := repo.(*DBUserRepo); ok {
-            userName := userRepo.GetUser()
-            fmt.Println(userName)
+        var uRepo UserRepo
+        for _, repo := range repos {
+            switch repo := repo.(type) {
+            case UserRepo:
+                {
+                    //this userRepo is a new instance of DBUserRepo
+                    fmt.Println("get new user repo")
+                    uRepo = repo
+                }
+            }
         }
+
+        userName := uRepo.GetUser()
+        fmt.Println(userName)
+
         return
     }
 
-    err := dbTXCommitter.Transaction(userRepo, logicFunc)
+    err := dbTXCommitter.Transaction(logicFunc, userRepo)
     //Or
     //err := dbTXCommitter.TransactionUsing("xormEngineName", userRepo, logicFunc)
     if err != nil {

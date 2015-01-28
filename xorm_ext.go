@@ -7,83 +7,124 @@ import (
 )
 
 type TransactionCommiter interface {
-	Transaction(repo interface{}, txFunc TXFunc) (err error)
-	TransactionUsing(name string, repo interface{}, txFunc TXFunc) (err error)
-	NoTransaction(repo interface{}, txFunc TXFunc) (err error)
-	NoTransactionUsing(name string, repo interface{}, txFunc TXFunc) (err error)
+	Transaction(txFunc TXFunc, repos ...interface{}) (err error)
+	TransactionUsing(txFunc TXFunc, name string, repos ...interface{}) (err error)
+	NoTransaction(txFunc TXFunc, repos ...interface{}) (err error)
+	NoTransactionUsing(txFunc TXFunc, name string, repos ...interface{}) (err error)
 }
 
 type DBTXCommiter struct {
 }
 
-func (p *DBTXCommiter) Transaction(originRepo interface{}, txFunc TXFunc) (err error) {
-	return p.TransactionUsing(REPO_DEFAULT_ENGINE, originRepo, txFunc)
+func (p *DBTXCommiter) Transaction(txFunc TXFunc, originRepos ...interface{}) (err error) {
+	return p.TransactionUsing(txFunc, REPO_DEFAULT_ENGINE, originRepos...)
 }
-func (p *DBTXCommiter) TransactionUsing(name string, originRepo interface{}, txFunc TXFunc) (err error) {
-	iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
+func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos ...interface{}) (err error) {
+	reposLen := 0
+	if originRepos != nil {
+		reposLen = len(originRepos)
+	}
 
-	dbRepo := getRepo(originRepo)
-
-	if dbRepo == nil {
-		err = ERR_NOT_COMBINE_WITH_DBREPO.New()
+	if reposLen < 1 {
+		err = ERR_DB_ONE_REPO_AT_LEAST.New()
 		return
 	}
 
-	vRepo := reflect.ValueOf(iRepo.Interface())
-	newRepoV := reflect.New(vRepo.Type())
-	if !newRepoV.IsValid() {
-		err = ERR_REFLACT_NEW_REPO.New()
-		return
+	newRepos := []interface{}{}
+	newDBRepos := []*DBRepo{}
+
+	for _, originRepo := range originRepos {
+		iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
+
+		dbRepo := getRepo(originRepo)
+
+		if dbRepo == nil {
+			err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
+			return
+		}
+
+		vRepo := reflect.ValueOf(iRepo.Interface())
+		newRepoV := reflect.New(vRepo.Type())
+		if !newRepoV.IsValid() {
+			err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
+			return
+		}
+
+		newRepoI := newRepoV.Interface()
+		newDbRepo := getRepo(newRepoI)
+
+		if newDbRepo == nil {
+			err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
+			return
+		}
+
+		newDbRepo.engines = dbRepo.engines
+		newDbRepo.defaultEngine = dbRepo.defaultEngine
+		newRepos = append(newRepos, newRepoI)
+		newDBRepos = append(newDBRepos, newDbRepo)
 	}
 
-	newRepoI := newRepoV.Interface()
-	newDbRepo := getRepo(newRepoI)
-
-	if newDbRepo == nil {
-		err = ERR_NOT_COMBINE_WITH_DBREPO.New()
-		return
-	}
-	newDbRepo.engines = dbRepo.engines
-	newDbRepo.defaultEngine = dbRepo.defaultEngine
-
-	if e := newDbRepo.BeginTransaction(name); e != nil {
+	if e := newDBRepos[0].BeginTransaction(name); e != nil {
 		return ERR_DB_TX_CANNOT_BEGIN.New()
 	}
-	return newDbRepo.CommitTransaction(newRepoI, txFunc)
+
+	if reposLen > 1 {
+		for i := 1; i < reposLen; i++ {
+			newDBRepos[i].txSession = newDBRepos[0].txSession
+			newDBRepos[i].isTransaction = newDBRepos[0].isTransaction
+		}
+	}
+
+	return newDBRepos[0].CommitTransaction(txFunc, newRepos...)
 }
 
-func (p *DBTXCommiter) NoTransaction(originRepo interface{}, txFunc TXFunc) (err error) {
-	return p.NoTransactionUsing(REPO_DEFAULT_ENGINE, originRepo, txFunc)
+func (p *DBTXCommiter) NoTransaction(txFunc TXFunc, originRepos ...interface{}) (err error) {
+	return p.NoTransactionUsing(txFunc, REPO_DEFAULT_ENGINE, originRepos...)
 }
-func (p *DBTXCommiter) NoTransactionUsing(name string, originRepo interface{}, txFunc TXFunc) (err error) {
-	iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
+func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepos ...interface{}) (err error) {
+	reposLen := 0
+	if originRepos != nil {
+		reposLen = len(originRepos)
+	}
 
-	dbRepo := getRepo(originRepo)
-
-	if dbRepo == nil {
-		err = ERR_NOT_COMBINE_WITH_DBREPO.New()
+	if reposLen < 1 {
+		err = ERR_DB_ONE_REPO_AT_LEAST.New()
 		return
 	}
 
-	vRepo := reflect.ValueOf(iRepo.Interface())
-	newRepoV := reflect.New(vRepo.Type())
-	if !newRepoV.IsValid() {
-		err = ERR_REFLACT_NEW_REPO.New()
-		return
+	newRepos := []interface{}{}
+	newDBRepos := []*DBRepo{}
+
+	for _, originRepo := range originRepos {
+		iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
+
+		dbRepo := getRepo(originRepo)
+
+		if dbRepo == nil {
+			err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
+			return
+		}
+
+		vRepo := reflect.ValueOf(iRepo.Interface())
+		newRepoV := reflect.New(vRepo.Type())
+		if !newRepoV.IsValid() {
+			err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
+			return
+		}
+
+		newRepoI := newRepoV.Interface()
+		newDbRepo := getRepo(newRepoI)
+
+		if newDbRepo == nil {
+			err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
+			return
+		}
+
+		newDbRepo.engines = dbRepo.engines
+		newDbRepo.defaultEngine = dbRepo.defaultEngine
 	}
 
-	newRepoI := newRepoV.Interface()
-	newDbRepo := getRepo(newRepoI)
-
-	if newDbRepo == nil {
-		err = ERR_NOT_COMBINE_WITH_DBREPO.New()
-		return
-	}
-
-	newDbRepo.engines = dbRepo.engines
-	newDbRepo.defaultEngine = dbRepo.defaultEngine
-
-	return newDbRepo.CommitNoTransaction(name, newRepoI, txFunc)
+	return newDBRepos[0].CommitNoTransaction(txFunc, name, newRepos...)
 }
 
 func getRepo(v interface{}) *DBRepo {
