@@ -11,7 +11,7 @@ const (
 	REPO_ERR_DEFAULT_ENGINE_NOT_FOUND = "`default` xorm engine not found"
 )
 
-type TXFunc func(repos []interface{}) (txResult TXResult, err error)
+type TXFunc func(repos []interface{}) (err error)
 
 type DBRepo struct {
 	isTransaction bool
@@ -41,7 +41,7 @@ func (p *DBRepo) IsTransaction() bool {
 	return p.isTransaction
 }
 
-func (p *DBRepo) BeginTransaction(engineName string) error {
+func (p *DBRepo) beginTransaction(engineName string) error {
 	if p.isTransaction == false {
 		p.isTransaction = true
 		p.txSession = p.SessionUsing(engineName)
@@ -54,7 +54,7 @@ func (p *DBRepo) BeginTransaction(engineName string) error {
 	return nil
 }
 
-func (p *DBRepo) CommitNoTransaction(txFunc TXFunc, engineName string, repos ...interface{}) (err error) {
+func (p *DBRepo) commitNoTransaction(txFunc TXFunc, engineName string, repos ...interface{}) (err error) {
 	if p.isTransaction {
 		return ERR_DB_IS_A_TX.New()
 	}
@@ -69,16 +69,14 @@ func (p *DBRepo) CommitNoTransaction(txFunc TXFunc, engineName string, repos ...
 		return ERR_DB_TX_NOFUNC.New()
 	}
 
-	if ret, e := txFunc(repos); e != nil {
+	if e := txFunc(repos); e != nil {
 		return e
-	} else {
-		p.commitTxResult(ret)
 	}
 
 	return
 }
 
-func (p *DBRepo) CommitTransaction(txFunc TXFunc, repos ...interface{}) (err error) {
+func (p *DBRepo) commitTransaction(txFunc TXFunc, repos ...interface{}) (err error) {
 	if !p.isTransaction {
 		return ERR_DB_NOT_A_TX.New()
 	}
@@ -105,66 +103,13 @@ func (p *DBRepo) CommitTransaction(txFunc TXFunc, repos ...interface{}) (err err
 		return
 	}()
 
-	if ret, e := txFunc(repos); e != nil {
+	if e := txFunc(repos); e != nil {
 		return e
-	} else {
-		p.commitTxResult(ret)
 	}
 
 	isNeedRollBack = false
 	if e := session.Commit(); e != nil {
 		return ERR_DB_TX_COMMIT_ERROR.New()
-	}
-	return
-}
-
-func (p *DBRepo) commitTxResult(tx TXResult) (err error) {
-	for _, resultItem := range tx.Items {
-		switch itemType := resultItem.(type) {
-		case UpdateItem:
-			{
-				p.UpdateItems(itemType)
-			}
-		case DeleteItem:
-			{
-				p.DeleteItems(itemType)
-			}
-		case interface{}:
-			{
-				p.InsertItems(itemType)
-			}
-		}
-	}
-	return
-}
-
-func (p *DBRepo) UpdateItems(items ...UpdateItem) (err error) {
-	for _, item := range items {
-		session := p.Session().Table(item.OrmObject)
-		for fk, fv := range item.Filters {
-			session = session.And(fk+"= ?", fv)
-		}
-		if _, err = session.Update(item.Params); err != nil {
-			return
-		}
-	}
-	return
-}
-
-func (p *DBRepo) InsertItems(items ...interface{}) (err error) {
-	_, err = p.Session().InsertMulti(items)
-	return
-}
-
-func (p *DBRepo) DeleteItems(items ...DeleteItem) (err error) {
-	for _, item := range items {
-		session := p.Session()
-		for fk, fv := range item.Filters {
-			session = session.And(fk+"= ?", fv)
-		}
-		if _, err = session.Delete(item.OrmObject); err != nil {
-			return
-		}
 	}
 	return
 }

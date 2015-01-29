@@ -40,7 +40,7 @@ func main() {
 
 	dbTXCommitter := new(xorm_ext.DBTXCommiter)
 
-	logicFunc := func(repos []interface{}) (txResult xorm_ext.TXResult, err error) {
+	logicFunc := func(repos []interface{}) (err error) {
 		fmt.Println("enter logic")
 
 		var uRepo UserRepo

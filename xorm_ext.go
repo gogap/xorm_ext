@@ -64,7 +64,7 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 		newDBRepos = append(newDBRepos, newDbRepo)
 	}
 
-	if e := newDBRepos[0].BeginTransaction(name); e != nil {
+	if e := newDBRepos[0].beginTransaction(name); e != nil {
 		return ERR_DB_TX_CANNOT_BEGIN.New()
 	}
 
@@ -75,7 +75,7 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 		}
 	}
 
-	return newDBRepos[0].CommitTransaction(txFunc, newRepos...)
+	return newDBRepos[0].commitTransaction(txFunc, newRepos...)
 }
 
 func (p *DBTXCommiter) NoTransaction(txFunc TXFunc, originRepos ...interface{}) (err error) {
@@ -124,7 +124,7 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 		newDbRepo.defaultEngine = dbRepo.defaultEngine
 	}
 
-	return newDBRepos[0].CommitNoTransaction(txFunc, name, newRepos...)
+	return newDBRepos[0].commitNoTransaction(txFunc, name, newRepos...)
 }
 
 func getRepo(v interface{}) *DBRepo {
