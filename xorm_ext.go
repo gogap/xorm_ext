@@ -120,10 +120,10 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 			return
 		}
 
-		newDBRepos = append(newDBRepos, newDbRepo)
-
 		newDbRepo.engines = dbRepo.engines
 		newDbRepo.defaultEngine = dbRepo.defaultEngine
+		newRepos = append(newRepos, newRepoI)
+		newDBRepos = append(newDBRepos, newDbRepo)
 	}
 
 	return newDBRepos[0].commitNoTransaction(txFunc, name, newRepos...)
