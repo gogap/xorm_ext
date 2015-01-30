@@ -120,6 +120,8 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 			return
 		}
 
+		newDBRepos = append(newDBRepos, newDbRepo)
+
 		newDbRepo.engines = dbRepo.engines
 		newDbRepo.defaultEngine = dbRepo.defaultEngine
 	}
