@@ -65,6 +65,8 @@ func (p *DBRepo) commitNoTransaction(txFunc TXFunc, engineName string, repos ...
 		return ERR_DB_SESSION_IS_NIL.New()
 	}
 
+	defer p.txSession.Close()
+
 	if txFunc == nil {
 		return ERR_DB_TX_NOFUNC.New()
 	}
@@ -91,6 +93,8 @@ func (p *DBRepo) commitTransaction(txFunc TXFunc, repos ...interface{}) (err err
 
 	isNeedRollBack := true
 	session := p.txSession
+
+	defer session.Close()
 
 	if session.Begin() != nil {
 		return ERR_DB_TX_CANNOT_BEGIN.New()
