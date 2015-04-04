@@ -3,6 +3,7 @@ package xorm_ext
 import (
 	"reflect"
 
+	"github.com/go-xorm/xorm"
 	. "github.com/gogap/xorm_ext/errorcode"
 )
 
@@ -95,6 +96,8 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 	newRepos := []interface{}{}
 	newDBRepos := []*DBRepo{}
 
+	sessions := []*xorm.Session{}
+
 	for _, originRepo := range originRepos {
 		iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
 
@@ -123,10 +126,17 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 		newDbRepo.engines = dbRepo.engines
 		newDbRepo.defaultEngine = dbRepo.defaultEngine
 		newRepos = append(newRepos, newRepoI)
+
+		if e := newDbRepo.beginNoTransaction(name); e != nil {
+			return e
+		}
+
 		newDBRepos = append(newDBRepos, newDbRepo)
+
+		sessions = append(sessions, newDbRepo.txSession)
 	}
 
-	return newDBRepos[0].commitNoTransaction(txFunc, name, newRepos...)
+	return newDBRepos[0].commitNoTransaction(txFunc, name, sessions, newRepos...)
 }
 
 func getRepo(v interface{}) *DBRepo {

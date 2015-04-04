@@ -16,4 +16,6 @@ var (
 	ERR_STRUCT_NOT_COMBINE_WITH_DBREPO = errors.T(11009, "your db repository struct should combine with DBRepo")
 	ERR_CAN_NOT_REFLACT_NEW_REPO       = errors.T(11010, "create new repo error")
 	ERR_DB_IS_NIL                      = errors.T(11011, "xorm Db is nil")
+	ERR_CAN_NOT_CONV_TO_NO_TX          = errors.T(11012, "could not convert TX to NON-TX")
+	ERR_CREATE_ENGINE_FAILED           = errors.T(11013, "create engine {{.engineName}} failed")
 )

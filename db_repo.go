@@ -2,6 +2,7 @@ package xorm_ext
 
 import (
 	"github.com/go-xorm/xorm"
+	"github.com/gogap/errors"
 
 	. "github.com/gogap/xorm_ext/errorcode"
 )
@@ -46,7 +47,7 @@ func (p *DBRepo) beginTransaction(engineName string) error {
 		p.isTransaction = true
 		p.txSession = p.SessionUsing(engineName)
 		if p.txSession == nil {
-			p.txSession = p.defaultEngine.NewSession()
+			return ERR_CREATE_ENGINE_FAILED.New(errors.Params{"engineName": engineName})
 		}
 	} else {
 		ERR_DB_TX_ALREADY_BEGINED.New()
@@ -54,18 +55,33 @@ func (p *DBRepo) beginTransaction(engineName string) error {
 	return nil
 }
 
-func (p *DBRepo) commitNoTransaction(txFunc TXFunc, engineName string, repos ...interface{}) (err error) {
+func (p *DBRepo) beginNoTransaction(engineName string) error {
 	if p.isTransaction {
-		return ERR_DB_IS_A_TX.New()
+		return ERR_CAN_NOT_CONV_TO_NO_TX.New()
 	}
 
 	p.txSession = p.SessionUsing(engineName)
+	if p.txSession == nil {
+		return ERR_CREATE_ENGINE_FAILED.New(errors.Params{"engineName": engineName})
+	}
+
+	return nil
+}
+
+func (p *DBRepo) commitNoTransaction(txFunc TXFunc, engineName string, sessions []*xorm.Session, repos ...interface{}) (err error) {
+	if p.isTransaction {
+		return ERR_DB_IS_A_TX.New()
+	}
 
 	if p.txSession == nil {
 		return ERR_DB_SESSION_IS_NIL.New()
 	}
 
-	defer p.txSession.Close()
+	defer func() {
+		for _, session := range sessions {
+			session.Close()
+		}
+	}()
 
 	if txFunc == nil {
 		return ERR_DB_TX_NOFUNC.New()
@@ -119,11 +135,7 @@ func (p *DBRepo) commitTransaction(txFunc TXFunc, repos ...interface{}) (err err
 }
 
 func (p *DBRepo) Session() *xorm.Session {
-	if p.isTransaction &&
-		p.txSession != nil {
-		return p.txSession
-	}
-	return p.defaultEngine.NewSession()
+	return p.txSession
 }
 
 func (p *DBRepo) NewSession() *xorm.Session {
