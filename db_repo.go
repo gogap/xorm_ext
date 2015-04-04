@@ -103,14 +103,14 @@ func (p *DBRepo) commitTransaction(txFunc TXFunc, repos ...interface{}) (err err
 		return ERR_DB_SESSION_IS_NIL.New()
 	}
 
+	defer session.Close()
+
 	if txFunc == nil {
 		return ERR_DB_TX_NOFUNC.New()
 	}
 
 	isNeedRollBack := true
 	session := p.txSession
-
-	defer session.Close()
 
 	if session.Begin() != nil {
 		return ERR_DB_TX_CANNOT_BEGIN.New()
