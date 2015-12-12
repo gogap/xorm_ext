@@ -7,6 +7,14 @@ import (
 	. "github.com/gogap/xorm_ext/errorcode"
 )
 
+type Inheriter interface {
+	Inherit(originalRepo interface{}) (err error)
+}
+
+type Deriver interface {
+	Derive() (v interface{}, err error)
+}
+
 type TransactionCommiter interface {
 	Transaction(txFunc TXFunc, repos ...interface{}) (err error)
 	TransactionUsing(txFunc TXFunc, name string, repos ...interface{}) (err error)
@@ -44,19 +52,38 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 			return
 		}
 
-		vRepo := reflect.ValueOf(iRepo.Interface())
-		newRepoV := reflect.New(vRepo.Type())
-		if !newRepoV.IsValid() {
-			err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
-			return
-		}
+		var newDbRepo *DBRepo
+		var newRepoI interface{}
 
-		newRepoI := newRepoV.Interface()
-		newDbRepo := getRepo(newRepoI)
+		if deriver, ok := originRepo.(Deriver); ok {
+			if repo, e := deriver.Derive(); e != nil {
+				err = e
+				return
+			} else {
+				newDbRepo = getRepo(repo)
+				newRepoI = repo
+			}
+		} else {
+			vRepo := reflect.ValueOf(iRepo.Interface())
+			newRepoV := reflect.New(vRepo.Type())
+			if !newRepoV.IsValid() {
+				err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
+				return
+			}
 
-		if newDbRepo == nil {
-			err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
-			return
+			newRepoI = newRepoV.Interface()
+			newDbRepo = getRepo(newRepoI)
+
+			if inheriter, ok := newRepoI.(Inheriter); ok {
+				if err = inheriter.Inherit(originRepo); err != nil {
+					return
+				}
+			}
+
+			if newDbRepo == nil {
+				err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
+				return
+			}
 		}
 
 		newDbRepo.engines = dbRepo.engines
@@ -66,7 +93,7 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 	}
 
 	if e := newDBRepos[0].beginTransaction(name); e != nil {
-		return ERR_DB_TX_CANNOT_BEGIN.New()
+		return ERR_DB_TX_CANNOT_BEGIN.New().Append(e)
 	}
 
 	if reposLen > 1 {

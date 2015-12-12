@@ -42,15 +42,17 @@ func (p *DBRepo) IsTransaction() bool {
 	return p.isTransaction
 }
 
-func (p *DBRepo) beginTransaction(engineName string) error {
+func (p *DBRepo) beginTransaction(engineName string) (err error) {
 	if p.isTransaction == false {
 		p.isTransaction = true
 		p.txSession = p.SessionUsing(engineName)
 		if p.txSession == nil {
-			return ERR_CREATE_ENGINE_FAILED.New(errors.Params{"engineName": engineName})
+			err = ERR_CREATE_ENGINE_FAILED.New(errors.Params{"engineName": engineName})
+			return
 		}
 	} else {
-		ERR_DB_TX_ALREADY_BEGINED.New()
+		err = ERR_DB_TX_ALREADY_BEGINED.New()
+		return
 	}
 	return nil
 }
@@ -111,8 +113,8 @@ func (p *DBRepo) commitTransaction(txFunc TXFunc, repos ...interface{}) (err err
 
 	isNeedRollBack := true
 
-	if p.txSession.Begin() != nil {
-		return ERR_DB_TX_CANNOT_BEGIN.New()
+	if e := p.txSession.Begin(); e != nil {
+		return ERR_DB_TX_CANNOT_BEGIN.New().Append(e)
 	}
 
 	defer func() {
