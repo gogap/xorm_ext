@@ -43,7 +43,6 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 	newDBRepos := []*DBRepo{}
 
 	for _, originRepo := range originRepos {
-		iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
 
 		dbRepo := getRepo(originRepo)
 
@@ -55,35 +54,8 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 		var newDbRepo *DBRepo
 		var newRepoI interface{}
 
-		if deriver, ok := originRepo.(Deriver); ok {
-			if repo, e := deriver.Derive(); e != nil {
-				err = e
-				return
-			} else {
-				newDbRepo = getRepo(repo)
-				newRepoI = repo
-			}
-		} else {
-			vRepo := reflect.ValueOf(iRepo.Interface())
-			newRepoV := reflect.New(vRepo.Type())
-			if !newRepoV.IsValid() {
-				err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
-				return
-			}
-
-			newRepoI = newRepoV.Interface()
-			newDbRepo = getRepo(newRepoI)
-
-			if inheriter, ok := newRepoI.(Inheriter); ok {
-				if err = inheriter.Inherit(originRepo); err != nil {
-					return
-				}
-			}
-
-			if newDbRepo == nil {
-				err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
-				return
-			}
+		if newDbRepo, newRepoI, err = createNewRepo(originRepo); err != nil {
+			return
 		}
 
 		newDbRepo.engines = dbRepo.engines
@@ -109,6 +81,7 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 func (p *DBTXCommiter) NoTransaction(txFunc TXFunc, originRepos ...interface{}) (err error) {
 	return p.NoTransactionUsing(txFunc, REPO_DEFAULT_ENGINE, originRepos...)
 }
+
 func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepos ...interface{}) (err error) {
 	reposLen := 0
 	if originRepos != nil {
@@ -126,7 +99,6 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 	sessions := []*xorm.Session{}
 
 	for _, originRepo := range originRepos {
-		iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
 
 		dbRepo := getRepo(originRepo)
 
@@ -135,18 +107,10 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 			return
 		}
 
-		vRepo := reflect.ValueOf(iRepo.Interface())
-		newRepoV := reflect.New(vRepo.Type())
-		if !newRepoV.IsValid() {
-			err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
-			return
-		}
+		var newDbRepo *DBRepo
+		var newRepoI interface{}
 
-		newRepoI := newRepoV.Interface()
-		newDbRepo := getRepo(newRepoI)
-
-		if newDbRepo == nil {
-			err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
+		if newDbRepo, newRepoI, err = createNewRepo(originRepo); err != nil {
 			return
 		}
 
@@ -206,4 +170,48 @@ func deepFields(iface interface{}, vType reflect.Type, fields []reflect.Value) i
 		}
 	}
 	return nil
+}
+
+func createNewRepo(originRepo interface{}) (newDbRepo *DBRepo, newRepoI interface{}, err error) {
+
+	iRepo := reflect.Indirect(reflect.ValueOf(originRepo))
+
+	vRepo := reflect.ValueOf(iRepo.Interface())
+	newRepoV := reflect.New(vRepo.Type())
+	if !newRepoV.IsValid() {
+		err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
+		return
+	}
+
+	if deriver, ok := originRepo.(Deriver); ok {
+		if repo, e := deriver.Derive(); e != nil {
+			err = e
+			return
+		} else {
+			newDbRepo = getRepo(repo)
+			newRepoI = repo
+		}
+	} else {
+		vRepo := reflect.ValueOf(iRepo.Interface())
+		newRepoV := reflect.New(vRepo.Type())
+		if !newRepoV.IsValid() {
+			err = ERR_CAN_NOT_REFLACT_NEW_REPO.New()
+			return
+		}
+
+		newRepoI = newRepoV.Interface()
+		newDbRepo = getRepo(newRepoI)
+
+		if inheriter, ok := newRepoI.(Inheriter); ok {
+			if err = inheriter.Inherit(originRepo); err != nil {
+				return
+			}
+		}
+
+		if newDbRepo == nil {
+			err = ERR_STRUCT_NOT_COMBINE_WITH_DBREPO.New()
+			return
+		}
+	}
+	return
 }
