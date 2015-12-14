@@ -16,19 +16,19 @@ type Deriver interface {
 }
 
 type TransactionCommiter interface {
-	Transaction(txFunc TXFunc, repos ...interface{}) (err error)
-	TransactionUsing(txFunc TXFunc, name string, repos ...interface{}) (err error)
-	NoTransaction(txFunc TXFunc, repos ...interface{}) (err error)
-	NoTransactionUsing(txFunc TXFunc, name string, repos ...interface{}) (err error)
+	Transaction(txFunc interface{}, repos ...interface{}) (err error)
+	TransactionUsing(txFunc interface{}, name string, repos ...interface{}) (err error)
+	NoTransaction(txFunc interface{}, repos ...interface{}) (err error)
+	NoTransactionUsing(txFunc interface{}, name string, repos ...interface{}) (err error)
 }
 
 type DBTXCommiter struct {
 }
 
-func (p *DBTXCommiter) Transaction(txFunc TXFunc, originRepos ...interface{}) (err error) {
+func (p *DBTXCommiter) Transaction(txFunc interface{}, originRepos ...interface{}) (err error) {
 	return p.TransactionUsing(txFunc, REPO_DEFAULT_ENGINE, originRepos...)
 }
-func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos ...interface{}) (err error) {
+func (p *DBTXCommiter) TransactionUsing(txFunc interface{}, name string, originRepos ...interface{}) (err error) {
 	reposLen := 0
 	if originRepos != nil {
 		reposLen = len(originRepos)
@@ -36,6 +36,11 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 
 	if reposLen < 1 {
 		err = ERR_DB_ONE_REPO_AT_LEAST.New()
+		return
+	}
+
+	if txFunc == nil {
+		err = ERR_DB_TX_NOFUNC.New()
 		return
 	}
 
@@ -78,11 +83,11 @@ func (p *DBTXCommiter) TransactionUsing(txFunc TXFunc, name string, originRepos 
 	return newDBRepos[0].commitTransaction(txFunc, newRepos...)
 }
 
-func (p *DBTXCommiter) NoTransaction(txFunc TXFunc, originRepos ...interface{}) (err error) {
+func (p *DBTXCommiter) NoTransaction(txFunc interface{}, originRepos ...interface{}) (err error) {
 	return p.NoTransactionUsing(txFunc, REPO_DEFAULT_ENGINE, originRepos...)
 }
 
-func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepos ...interface{}) (err error) {
+func (p *DBTXCommiter) NoTransactionUsing(txFunc interface{}, name string, originRepos ...interface{}) (err error) {
 	reposLen := 0
 	if originRepos != nil {
 		reposLen = len(originRepos)
@@ -90,6 +95,11 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc TXFunc, name string, originRepo
 
 	if reposLen < 1 {
 		err = ERR_DB_ONE_REPO_AT_LEAST.New()
+		return
+	}
+
+	if txFunc == nil {
+		err = ERR_DB_TX_NOFUNC.New()
 		return
 	}
 

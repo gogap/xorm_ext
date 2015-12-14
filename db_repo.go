@@ -1,10 +1,16 @@
 package xorm_ext
 
 import (
+	"fmt"
 	"github.com/go-xorm/xorm"
 	"github.com/gogap/errors"
+	"reflect"
 
 	. "github.com/gogap/xorm_ext/errorcode"
+)
+
+var (
+	errorType = reflect.TypeOf((*error)(nil)).Elem()
 )
 
 const (
@@ -70,13 +76,15 @@ func (p *DBRepo) beginNoTransaction(engineName string) error {
 	return nil
 }
 
-func (p *DBRepo) commitNoTransaction(txFunc TXFunc, engineName string, sessions []*xorm.Session, repos ...interface{}) (err error) {
+func (p *DBRepo) commitNoTransaction(txFunc interface{}, engineName string, sessions []*xorm.Session, repos ...interface{}) (err error) {
 	if p.isTransaction {
-		return ERR_DB_IS_A_TX.New()
+		err = ERR_DB_IS_A_TX.New()
+		return
 	}
 
 	if p.txSession == nil {
-		return ERR_DB_SESSION_IS_NIL.New()
+		err = ERR_DB_SESSION_IS_NIL.New()
+		return
 	}
 
 	defer func() {
@@ -85,36 +93,36 @@ func (p *DBRepo) commitNoTransaction(txFunc TXFunc, engineName string, sessions 
 		}
 	}()
 
-	if txFunc == nil {
-		return ERR_DB_TX_NOFUNC.New()
-	}
-
-	if e := txFunc(repos); e != nil {
-		return e
+	if err = callFunc(txFunc, repos); err != nil {
+		return
 	}
 
 	return
 }
 
-func (p *DBRepo) commitTransaction(txFunc TXFunc, repos ...interface{}) (err error) {
+func (p *DBRepo) commitTransaction(txFunc interface{}, repos ...interface{}) (err error) {
 	if !p.isTransaction {
-		return ERR_DB_NOT_A_TX.New()
+		err = ERR_DB_NOT_A_TX.New()
+		return
 	}
 
 	if p.txSession == nil {
-		return ERR_DB_SESSION_IS_NIL.New()
+		err = ERR_DB_SESSION_IS_NIL.New()
+		return
 	}
 
 	defer p.txSession.Close()
 
 	if txFunc == nil {
-		return ERR_DB_TX_NOFUNC.New()
+		err = ERR_DB_TX_NOFUNC.New()
+		return
 	}
 
 	isNeedRollBack := true
 
 	if e := p.txSession.Begin(); e != nil {
-		return ERR_DB_TX_CANNOT_BEGIN.New().Append(e)
+		err = ERR_DB_TX_CANNOT_BEGIN.New().Append(e)
+		return
 	}
 
 	defer func() {
@@ -124,13 +132,14 @@ func (p *DBRepo) commitTransaction(txFunc TXFunc, repos ...interface{}) (err err
 		return
 	}()
 
-	if e := txFunc(repos); e != nil {
-		return e
+	if err = callFunc(txFunc, repos); err != nil {
+		return
 	}
 
 	isNeedRollBack = false
-	if e := p.txSession.Commit(); e != nil {
-		return ERR_DB_TX_COMMIT_ERROR.New()
+	if err = p.txSession.Commit(); err != nil {
+		err = ERR_DB_TX_COMMIT_ERROR.New()
+		return
 	}
 	return
 }
@@ -148,4 +157,98 @@ func (p *DBRepo) SessionUsing(engineName string) *xorm.Session {
 		return engine.NewSession()
 	}
 	return nil
+}
+
+func callFunc(txfn interface{}, repos []interface{}) (err error) {
+	switch fn := txfn.(type) {
+	case TXFunc:
+		{
+			if err = fn(repos); err != nil {
+				return
+			}
+		}
+	default:
+		err = call(txfn, repos...)
+	}
+
+	return
+}
+
+func call(fn interface{}, args ...interface{}) error {
+	v := reflect.ValueOf(fn)
+	if !v.IsValid() {
+		return fmt.Errorf("call of nil")
+	}
+	typ := v.Type()
+	if typ.Kind() != reflect.Func {
+		return fmt.Errorf("non-function of type %s", typ)
+	}
+	if !goodFunc(typ) {
+		return fmt.Errorf("function called with %d args; should be 1 or 2", typ.NumOut())
+	}
+	numIn := typ.NumIn()
+	var dddType reflect.Type
+	if typ.IsVariadic() {
+		if len(args) < numIn-1 {
+			return fmt.Errorf("wrong number of args: got %d want at least %d", len(args), numIn-1)
+		}
+		dddType = typ.In(numIn - 1).Elem()
+	} else {
+		if len(args) != numIn {
+			return fmt.Errorf("wrong number of args: got %d want %d", len(args), numIn)
+		}
+	}
+	argv := make([]reflect.Value, len(args))
+	for i, arg := range args {
+		value := reflect.ValueOf(arg)
+		// Compute the expected type. Clumsy because of variadics.
+		var argType reflect.Type
+		if !typ.IsVariadic() || i < numIn-1 {
+			argType = typ.In(i)
+		} else {
+			argType = dddType
+		}
+
+		var err error
+		if argv[i], err = prepareArg(value, argType); err != nil {
+			return fmt.Errorf("arg %d: %s", i, err)
+		}
+	}
+
+	result := v.Call(argv)
+
+	if !result[0].IsNil() {
+		return result[0].Interface().(error)
+	}
+
+	return nil
+}
+
+func goodFunc(typ reflect.Type) bool {
+	if typ.NumOut() == 1 && typ.Out(0) == errorType {
+		return true
+	}
+
+	return false
+}
+
+func prepareArg(value reflect.Value, argType reflect.Type) (reflect.Value, error) {
+	if !value.IsValid() {
+		if !canBeNil(argType) {
+			return reflect.Value{}, fmt.Errorf("value is nil; should be of type %s", argType)
+		}
+		value = reflect.Zero(argType)
+	}
+	if !value.Type().AssignableTo(argType) {
+		return reflect.Value{}, fmt.Errorf("value has type %s; should be %s", value.Type(), argType)
+	}
+	return value, nil
+}
+
+func canBeNil(typ reflect.Type) bool {
+	switch typ.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return true
+	}
+	return false
 }
