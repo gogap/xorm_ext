@@ -159,43 +159,62 @@ func (p *DBRepo) SessionUsing(engineName string) *xorm.Session {
 	return nil
 }
 
-func callFunc(txfn interface{}, repos []interface{}) (err error) {
+func callFunc(txfn interface{}, args []interface{}) (err error) {
 	switch fn := txfn.(type) {
 	case TXFunc:
 		{
-			if err = fn(repos); err != nil {
+			if err = fn(args); err != nil {
+				return
+			}
+		}
+	case map[int]interface{}:
+		{
+			if f, exist := fn[0]; exist {
+				var values []interface{}
+				values, err = call(f, args...)
+
+				if err != nil {
+					if errfn, exist := fn[2]; exist { //error callback
+						_, _ = call(errfn, err)
+						return
+					}
+				} else if correctfn, exist := fn[1]; exist { //correct callback
+					_, err = call(correctfn, values...)
+					return
+				}
+
 				return
 			}
 		}
 	default:
-		err = call(txfn, repos...)
+		_, err = call(txfn, args...)
 	}
 
 	return
 }
 
-func call(fn interface{}, args ...interface{}) error {
+func call(fn interface{}, args ...interface{}) ([]interface{}, error) {
 	v := reflect.ValueOf(fn)
 	if !v.IsValid() {
-		return fmt.Errorf("call of nil")
+		return nil, fmt.Errorf("call of nil")
 	}
 	typ := v.Type()
 	if typ.Kind() != reflect.Func {
-		return fmt.Errorf("non-function of type %s", typ)
+		return nil, fmt.Errorf("non-function of type %s", typ)
 	}
 	if !goodFunc(typ) {
-		return fmt.Errorf("function called with %d args; should be 1 or 2", typ.NumOut())
+		return nil, fmt.Errorf("function called with %d args; should be 1", typ.NumOut())
 	}
 	numIn := typ.NumIn()
 	var dddType reflect.Type
 	if typ.IsVariadic() {
 		if len(args) < numIn-1 {
-			return fmt.Errorf("wrong number of args: got %d want at least %d", len(args), numIn-1)
+			return nil, fmt.Errorf("wrong number of args: got %d want at least %d", len(args), numIn-1)
 		}
 		dddType = typ.In(numIn - 1).Elem()
 	} else {
 		if len(args) != numIn {
-			return fmt.Errorf("wrong number of args: got %d want %d", len(args), numIn)
+			return nil, fmt.Errorf("wrong number of args: got %d want %d", len(args), numIn)
 		}
 	}
 	argv := make([]reflect.Value, len(args))
@@ -211,21 +230,38 @@ func call(fn interface{}, args ...interface{}) error {
 
 		var err error
 		if argv[i], err = prepareArg(value, argType); err != nil {
-			return fmt.Errorf("arg %d: %s", i, err)
+			return nil, fmt.Errorf("arg %d: %s", i, err)
 		}
 	}
 
 	result := v.Call(argv)
+	resultLen := len(result)
 
-	if !result[0].IsNil() {
-		return result[0].Interface().(error)
+	var resultValues []interface{}
+
+	for _, v := range result {
+		resultValues = append(resultValues, v.Interface())
 	}
 
-	return nil
+	if resultLen == 1 {
+		if resultValues[0] != nil {
+			return nil, resultValues[0].(error)
+		}
+	} else if resultLen > 1 {
+		if resultValues[resultLen-1] != nil {
+			return resultValues[0 : resultLen-1], resultValues[resultLen-1].(error)
+		} else {
+			return resultValues[0 : resultLen-1], nil
+		}
+	}
+
+	return nil, nil
 }
 
 func goodFunc(typ reflect.Type) bool {
-	if typ.NumOut() == 1 && typ.Out(0) == errorType {
+	if typ.NumOut() > 0 && typ.Out(typ.NumOut()-1) == errorType {
+		return true
+	} else if typ.NumOut() == 0 {
 		return true
 	}
 
