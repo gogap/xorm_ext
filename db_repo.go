@@ -14,9 +14,25 @@ var (
 )
 
 const (
+	Logic       int = 0
+	BeforeLogic int = 1
+	AfterLogic  int = 2
+	OnError     int = 3
+	AfterCommit int = 4
+)
+
+const (
 	REPO_DEFAULT_ENGINE               = "default"
 	REPO_ERR_DEFAULT_ENGINE_NOT_FOUND = "`default` xorm engine not found"
 )
+
+type logicFuncs struct {
+	BeforeLogic interface{}
+	AfterLogic  interface{}
+	OnError     interface{}
+	Logic       interface{}
+	AfterCommit interface{}
+}
 
 type TXFunc func(repos []interface{}) (err error)
 
@@ -93,8 +109,31 @@ func (p *DBRepo) commitNoTransaction(txFunc interface{}, engineName string, sess
 		}
 	}()
 
-	if err = callFunc(txFunc, repos); err != nil {
-		return
+	funcs := getFuncs(txFunc)
+
+	if funcs.BeforeLogic != nil {
+		if _, err = callFunc(funcs.BeforeLogic, funcs, repos); err != nil {
+			return
+		}
+	}
+
+	var values []interface{}
+	if funcs.Logic != nil {
+		if values, err = callFunc(funcs.Logic, funcs, repos); err != nil {
+			return
+		}
+	}
+
+	if funcs.AfterLogic != nil {
+		if values, err = callFunc(funcs.AfterLogic, funcs, repos); err != nil {
+			return
+		}
+	}
+
+	if funcs.AfterCommit != nil {
+		if _, err = callFunc(funcs.AfterCommit, funcs, values); err != nil {
+			return
+		}
 	}
 
 	return
@@ -132,8 +171,26 @@ func (p *DBRepo) commitTransaction(txFunc interface{}, repos ...interface{}) (er
 		return
 	}()
 
-	if err = callFunc(txFunc, repos); err != nil {
-		return
+	funcs := getFuncs(txFunc)
+
+	if funcs.BeforeLogic != nil {
+		if _, err = callFunc(funcs.BeforeLogic, funcs, repos); err != nil {
+			return
+		}
+	}
+
+	var values []interface{}
+
+	if funcs.Logic != nil {
+		if values, err = callFunc(funcs.Logic, funcs, repos); err != nil {
+			return
+		}
+	}
+
+	if funcs.AfterLogic != nil {
+		if values, err = callFunc(funcs.AfterLogic, funcs, repos); err != nil {
+			return
+		}
 	}
 
 	isNeedRollBack = false
@@ -141,6 +198,13 @@ func (p *DBRepo) commitTransaction(txFunc interface{}, repos ...interface{}) (er
 		err = ERR_DB_TX_COMMIT_ERROR.New()
 		return
 	}
+
+	if funcs.AfterCommit != nil {
+		if _, err = callFunc(funcs.AfterCommit, funcs, values); err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -159,35 +223,50 @@ func (p *DBRepo) SessionUsing(engineName string) *xorm.Session {
 	return nil
 }
 
-func callFunc(txfn interface{}, args []interface{}) (err error) {
-	switch fn := txfn.(type) {
+func getFuncs(fn interface{}) (funcs logicFuncs) {
+	switch fn := fn.(type) {
 	case TXFunc:
 		{
-			if err = fn(args); err != nil {
-				return
-			}
+			funcs.Logic = fn
 		}
 	case map[int]interface{}:
 		{
-			if f, exist := fn[0]; exist {
-				var values []interface{}
-				values, err = call(f, args...)
+			if hookBeforefn, exist := fn[BeforeLogic]; exist { //hook before
+				funcs.BeforeLogic = hookBeforefn
+			}
 
-				if err != nil {
-					if errfn, exist := fn[2]; exist { //error callback
-						_, _ = call(errfn, err)
-						return
-					}
-				} else if correctfn, exist := fn[1]; exist { //correct callback
-					_, err = call(correctfn, values...)
-					return
-				}
+			if logicfn, exist := fn[Logic]; exist {
+				funcs.Logic = logicfn
+			}
 
-				return
+			if hookAfterfn, exist := fn[AfterLogic]; exist { //hook after logic func
+				funcs.AfterLogic = hookAfterfn
+			}
+
+			if errfn, exist := fn[OnError]; exist { //error callback
+				funcs.OnError = errfn
+			}
+
+			if afterCommitfn, exist := fn[AfterCommit]; exist { //correct callback
+				funcs.AfterCommit = afterCommitfn
 			}
 		}
 	default:
-		_, err = call(txfn, args...)
+		funcs.Logic = fn
+	}
+
+	return
+}
+
+func callFunc(fn interface{}, funcs logicFuncs, args []interface{}) (values []interface{}, err error) {
+	if fn == nil {
+		return
+	}
+
+	if values, err = call(fn, args...); err != nil {
+		if funcs.OnError != nil {
+			call(funcs.OnError, err)
+		}
 	}
 
 	return
@@ -203,18 +282,18 @@ func call(fn interface{}, args ...interface{}) ([]interface{}, error) {
 		return nil, fmt.Errorf("non-function of type %s", typ)
 	}
 	if !goodFunc(typ) {
-		return nil, fmt.Errorf("function called with %d args; should be 1", typ.NumOut())
+		return nil, fmt.Errorf("the last return value should be an error type")
 	}
 	numIn := typ.NumIn()
 	var dddType reflect.Type
 	if typ.IsVariadic() {
 		if len(args) < numIn-1 {
-			return nil, fmt.Errorf("wrong number of args: got %d want at least %d", len(args), numIn-1)
+			return nil, fmt.Errorf("wrong number of args: got %d want at least %d, type: %v", len(args), numIn-1, typ)
 		}
 		dddType = typ.In(numIn - 1).Elem()
 	} else {
 		if len(args) != numIn {
-			return nil, fmt.Errorf("wrong number of args: got %d want %d", len(args), numIn)
+			return nil, fmt.Errorf("wrong number of args: got %d want %d, type: %v", len(args), numIn, typ)
 		}
 	}
 	argv := make([]reflect.Value, len(args))
