@@ -225,7 +225,7 @@ func (p *DBRepo) SessionUsing(engineName string) *xorm.Session {
 
 func getFuncs(fn interface{}) (funcs logicFuncs) {
 	switch fn := fn.(type) {
-	case TXFunc:
+	case TXFunc, func(repos []interface{}) (err error):
 		{
 			funcs.Logic = fn
 		}
@@ -263,10 +263,22 @@ func callFunc(fn interface{}, funcs logicFuncs, args []interface{}) (values []in
 		return
 	}
 
-	if values, err = call(fn, args...); err != nil {
-		if funcs.OnError != nil {
-			call(funcs.OnError, err)
+	switch logicFunc := fn.(type) {
+	case TXFunc:
+		{
+			err = logicFunc(args)
 		}
+	case func(repos []interface{}) (err error):
+		{
+			err = logicFunc(args)
+		}
+	default:
+		if values, err = call(fn, args...); err != nil {
+			if funcs.OnError != nil {
+				call(funcs.OnError, err)
+			}
+		}
+
 	}
 
 	return
