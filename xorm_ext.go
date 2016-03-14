@@ -106,7 +106,7 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc interface{}, name string, origi
 	newRepos := []interface{}{}
 	newDBRepos := []*DBRepo{}
 
-	sessions := []*xorm.Session{}
+	var sessions []*xorm.Session
 
 	for _, originRepo := range originRepos {
 
@@ -134,10 +134,18 @@ func (p *DBTXCommiter) NoTransactionUsing(txFunc interface{}, name string, origi
 
 		newDBRepos = append(newDBRepos, newDbRepo)
 
-		sessions = append(sessions, newDbRepo.txSession)
+		if newDbRepo.txSession != nil {
+			sessions = append(sessions, newDbRepo.txSession)
+		}
 	}
 
-	return newDBRepos[0].commitNoTransaction(txFunc, name, sessions, newRepos...)
+	defer func() {
+		for _, session := range sessions {
+			session.Close()
+		}
+	}()
+
+	return newDBRepos[0].commitNoTransaction(txFunc, name, newRepos...)
 }
 
 func getRepo(v interface{}) *DBRepo {

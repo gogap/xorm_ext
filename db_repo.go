@@ -85,29 +85,15 @@ func (p *DBRepo) beginNoTransaction(engineName string) error {
 	}
 
 	p.txSession = p.SessionUsing(engineName)
-	if p.txSession == nil {
-		return ERR_CREATE_ENGINE_FAILED.New(errors.Params{"engineName": engineName})
-	}
 
 	return nil
 }
 
-func (p *DBRepo) commitNoTransaction(txFunc interface{}, engineName string, sessions []*xorm.Session, repos ...interface{}) (err error) {
+func (p *DBRepo) commitNoTransaction(txFunc interface{}, engineName string, repos ...interface{}) (err error) {
 	if p.isTransaction {
 		err = ERR_DB_IS_A_TX.New()
 		return
 	}
-
-	if p.txSession == nil {
-		err = ERR_DB_SESSION_IS_NIL.New()
-		return
-	}
-
-	defer func() {
-		for _, session := range sessions {
-			session.Close()
-		}
-	}()
 
 	funcs := getFuncs(txFunc)
 
